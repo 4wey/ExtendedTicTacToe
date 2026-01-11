@@ -1,0 +1,15 @@
+#pragma once
+
+enum class GameMode {
+    Classic3x3 = 0,
+    Score10x10 = 1
+};
+
+enum class FillMode {
+    Free = 0,
+    TopDownRows = 1,
+    LeftRightCols = 2,
+    RandomRow = 3,
+    RandomCol = 4,
+    RandomRowOrCol = 5
+};

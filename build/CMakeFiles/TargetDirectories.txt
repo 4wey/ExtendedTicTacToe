@@ -1,0 +1,5 @@
+/Users/4wey/Desktop/TicTacToe/build/CMakeFiles/game.dir
+/Users/4wey/Desktop/TicTacToe/build/CMakeFiles/edit_cache.dir
+/Users/4wey/Desktop/TicTacToe/build/CMakeFiles/rebuild_cache.dir
+/Users/4wey/Desktop/TicTacToe/build/CMakeFiles/game_autogen_timestamp_deps.dir
+/Users/4wey/Desktop/TicTacToe/build/CMakeFiles/game_autogen.dir
