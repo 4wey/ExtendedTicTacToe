@@ -1,341 +1,406 @@
 #include "mainwindow.h"
-#include "widgets/boardwidget.h"
-#include "statsdialog.h"
-#include "ui/rulesdialog.h"
 
 #include <QWidget>
-#include <QPushButton>
-#include <QComboBox>
-#include <QLabel>
-#include <QHBoxLayout>
 #include <QVBoxLayout>
-#include <QGroupBox>
-#include <QString>
+#include <QHBoxLayout>
+#include <QComboBox>
+#include <QCheckBox>
+#include <QPushButton>
+#include <QLabel>
+#include <QMessageBox>
+#include <QPainter>
+#include <QPixmap>
 
-static QString markText(int p) { return (p == 1) ? "X" : "O"; }
+#include "widgets/boardwidget.h"
+#include "ui/rulesdialog.h"
+#include "statsdialog.h"
 
-MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
-    buildUi();
-    retranslateUi();
-
-    cbLanguage_->setCurrentIndex(0);
-    cbMode_->setCurrentIndex(0);
-    cbFill_->setCurrentIndex(0);
-
-    connect(btnNewGame_, &QPushButton::clicked, this, &MainWindow::onNewGame);
-    connect(btnStats_, &QPushButton::clicked, this, &MainWindow::onShowStats);
-    connect(btnRules_, &QPushButton::clicked, this, &MainWindow::onShowRules);
-
-    connect(cbLanguage_, QOverload<int>::of(&QComboBox::currentIndexChanged),
-            this, &MainWindow::onLanguageChanged);
-    connect(cbMode_, QOverload<int>::of(&QComboBox::currentIndexChanged),
-            this, &MainWindow::onModeChanged);
-    connect(cbFill_, QOverload<int>::of(&QComboBox::currentIndexChanged),
-            this, &MainWindow::onFillModeChanged);
-
-    connect(board_, &BoardWidget::cellClicked, this, &MainWindow::onCellClicked);
-
-    setMinimumSize(900, 600);
-
-    syncUiToEngine();
-    engine_.startNewGame();
-    refreshBoard();
-    updateInfoLabel();
-    updateRulesButton();
+static bool isScoreMode(GameMode m) {
+    return m == GameMode::Score10x10;
 }
 
-MainWindow::~MainWindow() = default;
-
-void MainWindow::buildUi() {
-    auto* root = new QWidget(this);
-    setCentralWidget(root);
-
-    auto* leftPanel = new QVBoxLayout();
-    leftPanel->setSpacing(12);
-
-    btnNewGame_ = new QPushButton(root);
-    btnStats_   = new QPushButton(root);
-    btnRules_   = new QPushButton(root);
-
-    lblLang_ = new QLabel(root);
-    cbLanguage_ = new QComboBox(root);
-    cbLanguage_->addItem("Русский");
-    cbLanguage_->addItem("English");
-
-    lblMode_ = new QLabel(root);
-    cbMode_ = new QComboBox(root);
-    cbMode_->addItem("Classic");
-    cbMode_->addItem("Score");
-
-    lblFill_ = new QLabel(root);
-    cbFill_ = new QComboBox(root);
-    cbFill_->addItem("Free");
-    cbFill_->addItem("Top-down");
-    cbFill_->addItem("Left-right");
-    cbFill_->addItem("Random row");
-    cbFill_->addItem("Random col");
-    cbFill_->addItem("Random row OR col");
-
-    lblInfo_ = new QLabel(root);
-    lblInfo_->setWordWrap(true);
-
-    auto* gbSettings = new QGroupBox(root);
-    auto* settingsLayout = new QVBoxLayout(gbSettings);
-    settingsLayout->addWidget(lblLang_);
-    settingsLayout->addWidget(cbLanguage_);
-    settingsLayout->addSpacing(8);
-    settingsLayout->addWidget(lblMode_);
-    settingsLayout->addWidget(cbMode_);
-    settingsLayout->addSpacing(8);
-    settingsLayout->addWidget(lblFill_);
-    settingsLayout->addWidget(cbFill_);
-
-    leftPanel->addWidget(btnNewGame_);
-    leftPanel->addWidget(btnStats_);
-    leftPanel->addWidget(btnRules_);
-    leftPanel->addWidget(gbSettings);
-    leftPanel->addWidget(lblInfo_);
-    leftPanel->addStretch(1);
-
-    board_ = new BoardWidget(root);
-    board_->setBoardSize(3);
-
-    auto* mainLayout = new QHBoxLayout(root);
-    mainLayout->addLayout(leftPanel, 0);
-    mainLayout->addWidget(board_, 1);
-}
-
-void MainWindow::retranslateUi() {
-    if (lang_ == UiLang::RU) {
-        setWindowTitle("Крестики-нолики");
-        btnNewGame_->setText("Новая игра");
-        btnStats_->setText("Статистика");
-        btnRules_->setText("Правила");
-
-        lblLang_->setText("Язык");
-        lblMode_->setText("Режим");
-        lblFill_->setText("Заполнение (только Score)");
-
-        cbLanguage_->setItemText(0, "Русский");
-        cbLanguage_->setItemText(1, "English");
-
-        cbMode_->setItemText(0, "Классика 3×3");
-        cbMode_->setItemText(1, "Score: 10×10, линия 5, 60 ходов");
-
-        cbFill_->setItemText(0, "Свободно");
-        cbFill_->setItemText(1, "Сверху-вниз (по строкам)");
-        cbFill_->setItemText(2, "Слева-направо (по столбцам)");
-        cbFill_->setItemText(3, "Случайная строка");
-        cbFill_->setItemText(4, "Случайный столбец");
-        cbFill_->setItemText(5, "Случайная строка ИЛИ столбец");
-    } else {
-        setWindowTitle("Tic-Tac-Toe");
-        btnNewGame_->setText("New Game");
-        btnStats_->setText("Statistics");
-        btnRules_->setText("Rules");
-
-        lblLang_->setText("Language");
-        lblMode_->setText("Mode");
-        lblFill_->setText("Filling (Score only)");
-
-        cbMode_->setItemText(0, "Classic 3×3");
-        cbMode_->setItemText(1, "Score: 10×10, line 5, 60 moves");
-
-        cbFill_->setItemText(0, "Free");
-        cbFill_->setItemText(1, "Top-down (rows)");
-        cbFill_->setItemText(2, "Left-right (cols)");
-        cbFill_->setItemText(3, "Random row");
-        cbFill_->setItemText(4, "Random col");
-        cbFill_->setItemText(5, "Random row OR col");
+static FillMode fillModeFromIndex(int idx) {
+    switch (idx) {
+        case 0: return FillMode::Free;
+        case 1: return FillMode::TopDownRows;
+        case 2: return FillMode::LeftRightCols;
+        case 3: return FillMode::RandomRow;
+        case 4: return FillMode::RandomCol;
+        case 5: return FillMode::RandomRowOrCol;
+        default: return FillMode::Free;
     }
 }
 
-void MainWindow::syncUiToEngine() {
-    GameMode mode = (cbMode_->currentIndex() == 0) ? GameMode::Classic3x3 : GameMode::Score10x10;
+static int fillIndexFromMode(FillMode m) {
+    switch (m) {
+        case FillMode::Free: return 0;
+        case FillMode::TopDownRows: return 1;
+        case FillMode::LeftRightCols: return 2;
+        case FillMode::RandomRow: return 3;
+        case FillMode::RandomCol: return 4;
+        case FillMode::RandomRowOrCol: return 5;
+        default: return 0;
+    }
+}
+
+MainWindow::MainWindow(QWidget* parent)
+    : QMainWindow(parent) {
+    setupUi();
+
+    // режим по умолчанию
+    engine_.setMode(GameMode::Classic3x3);
+    engine_.setFillMode(FillMode::Free);
+
+    applyModeUi();
+    engine_.startNewGame();
+    refreshBoardAll();
+    refreshStatus();
+}
+
+void MainWindow::setupUi() {
+    auto* central = new QWidget(this);
+    setCentralWidget(central);
+
+    auto* root = new QVBoxLayout(central);
+    root->setContentsMargins(12, 12, 12, 12);
+    root->setSpacing(10);
+
+    // Верхняя панель: режим + fill + показать веса + кнопки
+    auto* topRow = new QHBoxLayout();
+    topRow->setSpacing(10);
+
+    modeCombo_ = new QComboBox(this);
+    modeCombo_->addItem("Обычные 3×3", (int)GameMode::Classic3x3);
+    modeCombo_->addItem("Score 10×10", (int)GameMode::Score10x10);
+
+    fillCombo_ = new QComboBox(this);
+    fillCombo_->addItem("Без ограничений", (int)FillMode::Free);
+    fillCombo_->addItem("Сверху вниз (строки)", (int)FillMode::TopDownRows);
+    fillCombo_->addItem("Слева направо (столбцы)", (int)FillMode::LeftRightCols);
+    fillCombo_->addItem("Случайная строка", (int)FillMode::RandomRow);
+    fillCombo_->addItem("Случайный столбец", (int)FillMode::RandomCol);
+    fillCombo_->addItem("Случайная строка/столбец", (int)FillMode::RandomRowOrCol);
+
+    showWeightsBox_ = new QCheckBox("Показать веса", this);
+    showWeightsBox_->setChecked(false);
+
+    newGameBtn_ = new QPushButton("Новая игра", this);
+    rulesBtn_ = new QPushButton("Правила", this);
+
+    topRow->addWidget(new QLabel("Режим:", this));
+    topRow->addWidget(modeCombo_, 1);
+
+    topRow->addWidget(new QLabel("Ограничение:", this));
+    topRow->addWidget(fillCombo_, 1);
+
+    topRow->addWidget(showWeightsBox_);
+    topRow->addStretch(1);
+    topRow->addWidget(rulesBtn_);
+    topRow->addWidget(newGameBtn_);
+
+    root->addLayout(topRow);
+
+    // Статусы
+    statusLabel_ = new QLabel(this);
+    scoreLabel_ = new QLabel(this);
+    statusLabel_->setWordWrap(true);
+    scoreLabel_->setWordWrap(true);
+
+    root->addWidget(statusLabel_);
+    root->addWidget(scoreLabel_);
+
+    // Поле
+    board_ = new BoardWidget(this);
+
+    // Иконки генерим сами (чтобы всегда работало)
+    board_->setIcons(makeXIcon(256), makeOIcon(256));
+
+    root->addWidget(board_, 0, Qt::AlignCenter);
+
+    // Сигналы
+    connect(modeCombo_, QOverload<int>::of(&QComboBox::currentIndexChanged),
+            this, &MainWindow::onModeChanged);
+    connect(fillCombo_, QOverload<int>::of(&QComboBox::currentIndexChanged),
+            this, &MainWindow::onFillModeChanged);
+    connect(showWeightsBox_, &QCheckBox::toggled,
+            this, &MainWindow::onShowWeightsToggled);
+    connect(newGameBtn_, &QPushButton::clicked,
+            this, &MainWindow::onNewGameClicked);
+    connect(rulesBtn_, &QPushButton::clicked,
+            this, &MainWindow::onRulesClicked);
+    connect(board_, &BoardWidget::cellClicked,
+            this, &MainWindow::onCellClicked);
+
+    setWindowTitle("TicTacToe");
+    resize(900, 900);
+}
+
+void MainWindow::onModeChanged(int index) {
+    const auto mode = (GameMode)modeCombo_->itemData(index).toInt();
     engine_.setMode(mode);
 
-    FillMode fill = static_cast<FillMode>(cbFill_->currentIndex());
-    engine_.setFillMode(fill);
+    // при смене режима — сброс ограничений/весов/галочки
+    if (isScoreMode(mode)) {
+        engine_.setFillMode(fillModeFromIndex(fillCombo_->currentIndex()));
+    } else {
+        engine_.setFillMode(FillMode::Free);
+    }
 
-    bool score = (mode == GameMode::Score10x10);
-    cbFill_->setEnabled(score);
-    lblFill_->setEnabled(score);
+    showWeightsBox_->blockSignals(true);
+    showWeightsBox_->setChecked(false);
+    showWeightsBox_->blockSignals(false);
 
-    board_->setBoardSize(engine_.boardSize());
+    applyModeUi();
+
+    engine_.startNewGame();
+    refreshBoardAll();
+    refreshStatus();
 }
 
-QString MainWindow::stripeInfoText() const {
-    if (engine_.mode() != GameMode::Score10x10) return "";
-
-    const int ar = engine_.activeRow();
-    const int ac = engine_.activeCol();
-
-    FillMode f = engine_.fillMode();
-
-    if (f == FillMode::TopDownRows) {
-        return (lang_ == UiLang::RU) ? QString(" | Активная строка: %1").arg(ar)
-                                     : QString(" | Active row: %1").arg(ar);
-    }
-    if (f == FillMode::LeftRightCols) {
-        return (lang_ == UiLang::RU) ? QString(" | Активный столбец: %1").arg(ac)
-                                     : QString(" | Active col: %1").arg(ac);
-    }
-    if (f == FillMode::RandomRow) {
-        return (lang_ == UiLang::RU) ? QString(" | Случайная строка: %1").arg(ar)
-                                     : QString(" | Random row: %1").arg(ar);
-    }
-    if (f == FillMode::RandomCol) {
-        return (lang_ == UiLang::RU) ? QString(" | Случайный столбец: %1").arg(ac)
-                                     : QString(" | Random col: %1").arg(ac);
-    }
-    if (f == FillMode::RandomRowOrCol) {
-        return (lang_ == UiLang::RU) ? QString(" | Случ. строка: %1, столбец: %2").arg(ar).arg(ac)
-                                     : QString(" | Rand row: %1, col: %2").arg(ar).arg(ac);
-    }
-    return "";
+void MainWindow::onFillModeChanged(int index) {
+    Q_UNUSED(index);
+    applyFillUi();
+    refreshBoardAll();
+    refreshStatus();
 }
 
-void MainWindow::refreshBoard() {
-    const int N = engine_.boardSize();
-    for (int r = 0; r < N; ++r) {
-        for (int c = 0; c < N; ++c) {
-            int v = engine_.cellOwner(r, c);
-            QString t = (v == 0) ? "" : markText(v);
-            bool enabled = engine_.isMoveAllowed(r, c);
-            board_->setCellText(r, c, t, enabled);
-        }
-    }
+void MainWindow::onShowWeightsToggled(bool on) {
+    board_->setShowWeights(on);
 }
 
-void MainWindow::updateInfoLabel() {
-    if (!engine_.isActive()) return;
+void MainWindow::onNewGameClicked() {
+    engine_.startNewGame();
+    refreshBoardAll();
+    refreshStatus();
+}
 
-    if (engine_.mode() == GameMode::Classic3x3) {
-        lblInfo_->setText((lang_ == UiLang::RU)
-            ? QString("Классика: ход %1.").arg(markText(engine_.currentPlayer()))
-            : QString("Classic: %1 to move.").arg(markText(engine_.currentPlayer()))
-        );
+void MainWindow::onRulesClicked() {
+    const GameMode m = engine_.mode();
+
+    if (!isScoreMode(m)) {
+        // по твоему требованию: для 3×3 правила можно не показывать
+        QMessageBox::information(this, "Правила", "Обычные крестики-нолики 3×3.");
         return;
     }
 
-    ScoreSnapshot s = engine_.currentScore();
-    if (lang_ == UiLang::RU) {
-        lblInfo_->setText(
-            QString("Score | Ход: %1 | Осталось ходов: %2%3\nЛинии: X=%4 O=%5 | Потрачено: X=%6 O=%7 | Итог: X=%8 O=%9")
-                .arg(markText(engine_.currentPlayer()))
-                .arg(engine_.movesLeft())
-                .arg(stripeInfoText())
-                .arg(s.xLine).arg(s.oLine)
-                .arg(s.xSpent).arg(s.oSpent)
-                .arg(s.xTotal).arg(s.oTotal)
-        );
-    } else {
-        lblInfo_->setText(
-            QString("Score | Turn: %1 | Left: %2%3\nLines: X=%4 O=%5 | Spent: X=%6 O=%7 | Total: X=%8 O=%9")
-                .arg(markText(engine_.currentPlayer()))
-                .arg(engine_.movesLeft())
-                .arg(stripeInfoText())
-                .arg(s.xLine).arg(s.oLine)
-                .arg(s.xSpent).arg(s.oSpent)
-                .arg(s.xTotal).arg(s.oTotal)
-        );
-    }
-}
+    QString rules;
+    rules += "Score mode (10×10)\n\n";
+    rules += "1) Ходы:\n";
+    rules += "   • X ходит первым и платит только чётные стоимости: 2,4,6,8,...\n";
+    rules += "   • O платит только нечётные стоимости: 3,5,7,9,...\n\n";
+    rules += "2) Поле имеет веса клеток (целые числа).\n";
+    rules += "   Очки линий считаются по сумме весов клеток, занятых линией.\n";
+    rules += "   (Линии считаем длиной 5 по горизонтали/вертикали/диагоналям.)\n\n";
+    rules += "3) Итоговые очки:\n";
+    rules += "   total = lineScore - spent\n\n";
+    rules += "4) Ограничение ходов:\n";
+    rules += "   • Без ограничений\n";
+    rules += "   • Сверху вниз (разрешена только первая незаполненная строка)\n";
+    rules += "   • Слева направо (разрешён только первый незаполненный столбец)\n";
+    rules += "   • Случайная строка / столбец / строка-или-столбец\n";
 
-void MainWindow::updateRulesButton() {
-    btnRules_->setVisible(engine_.mode() == GameMode::Score10x10);
-}
-
-void MainWindow::onNewGame() {
-    gamesPlayed_++;
-
-    syncUiToEngine();
-    engine_.startNewGame();
-
-    refreshBoard();
-    updateInfoLabel();
-    updateRulesButton();
+    RulesDialog dlg(this);
+    dlg.setWindowTitle("Правила режима");
+    dlg.setRulesText(rules);
+    dlg.exec();
 }
 
 void MainWindow::onCellClicked(int r, int c) {
     if (!engine_.isActive()) return;
 
+    if (!engine_.isMoveAllowed(r, c)) {
+        // тихо игнорируем — или можно показать подсказку
+        return;
+    }
+
     MoveOutcome out = engine_.applyMove(r, c);
-    if (!out.accepted) return;
 
-    refreshBoard();
+    // обновим весь борд (быстрее по разработке, чем микропатчить)
+    refreshBoardAll();
+    refreshStatus();
 
-    if (out.finished) {
-        if (engine_.mode() == GameMode::Classic3x3) {
-            if (out.classicWinner == 1) xWins_++;
-            else if (out.classicWinner == -1) oWins_++;
-            else draws_++;
+    finishIfNeeded(out);
+}
 
-            lblInfo_->setText((lang_ == UiLang::RU)
-                ? (out.classicWinner == 0 ? "Ничья." : QString("Победа %1!").arg(markText(out.classicWinner)))
-                : (out.classicWinner == 0 ? "Draw." : QString("%1 wins!").arg(markText(out.classicWinner)))
-            );
+void MainWindow::finishIfNeeded(const MoveOutcome& out) {
+    if (!out.finished) return;
+
+    const GameMode m = engine_.mode();
+
+    if (!isScoreMode(m)) {
+        if (out.classicWinner == 1) {
+            QMessageBox::information(this, "Игра окончена", "Победил X!");
+        } else if (out.classicWinner == -1) {
+            QMessageBox::information(this, "Игра окончена", "Победил O!");
         } else {
-            ScoreSnapshot s = out.score;
-            if (s.xTotal > s.oTotal) xWins_++;
-            else if (s.oTotal > s.xTotal) oWins_++;
-            else draws_++;
-
-            QString result = (s.xTotal > s.oTotal) ? "X" : (s.oTotal > s.xTotal ? "O" : "D");
-
-            if (lang_ == UiLang::RU) {
-                lblInfo_->setText(
-                    (result == "D" ? "Ничья." : QString("Победа %1!").arg(result)) +
-                    QString("\nЛинии: X=%1, O=%2").arg(s.xLine).arg(s.oLine) +
-                    QString("\nПотрачено: X=%1, O=%2").arg(s.xSpent).arg(s.oSpent) +
-                    QString("\nИтог: X=%1, O=%2").arg(s.xTotal).arg(s.oTotal)
-                );
-            } else {
-                lblInfo_->setText(
-                    (result == "D" ? "Draw." : QString("%1 wins!").arg(result)) +
-                    QString("\nLines: X=%1, O=%2").arg(s.xLine).arg(s.oLine) +
-                    QString("\nSpent: X=%1, O=%2").arg(s.xSpent).arg(s.oSpent) +
-                    QString("\nTotal: X=%1, O=%2").arg(s.xTotal).arg(s.oTotal)
-                );
-            }
+            QMessageBox::information(this, "Игра окончена", "Ничья.");
         }
         return;
     }
 
-    updateInfoLabel();
+    // Score mode итог
+    const auto s = out.score;
+    QString msg;
+    msg += "Score mode завершён.\n\n";
+    msg += QString("X: линии=%1, потрачено=%2, итог=%3\n").arg(s.xLine).arg(s.xSpent).arg(s.xTotal);
+    msg += QString("O: линии=%1, потрачено=%2, итог=%3\n").arg(s.oLine).arg(s.oSpent).arg(s.oTotal);
+
+    if (s.xTotal > s.oTotal) msg += "\nПобедил X!";
+    else if (s.oTotal > s.xTotal) msg += "\nПобедил O!";
+    else msg += "\nНичья.";
+
+    QMessageBox::information(this, "Игра окончена", msg);
 }
 
-void MainWindow::onShowStats() {
-    if (!statsDlg_) statsDlg_ = new StatsDialog(this);
-    statsDlg_->setStats(gamesPlayed_, xWins_, oWins_, draws_, lang_ == UiLang::RU);
-    statsDlg_->exec();
+void MainWindow::applyFillUi() {
+    if (!isScoreMode(engine_.mode())) {
+        engine_.setFillMode(FillMode::Free);
+        return;
+    }
+    engine_.setFillMode(fillModeFromIndex(fillCombo_->currentIndex()));
 }
 
-void MainWindow::onShowRules() {
-    if (engine_.mode() == GameMode::Classic3x3) return;
+void MainWindow::applyModeUi() {
+    const GameMode m = engine_.mode();
+    const bool score = isScoreMode(m);
 
-    if (!rulesDlg_) rulesDlg_ = new RulesDialog(this);
-    rulesDlg_->setRules(engine_.mode(), engine_.fillMode(), engine_.config(), lang_ == UiLang::RU);
-    rulesDlg_->exec();
+    // включаем/выключаем контролы
+    fillCombo_->setEnabled(score);
+    showWeightsBox_->setEnabled(score);
+    rulesBtn_->setEnabled(score);
+
+    // фиксированные размеры клеток (подкрути как нравится)
+    if (!score) {
+        board_->setCellSizePx(150);  // большие
+        board_->setBoardSize(3);
+    } else {
+        board_->setCellSizePx(58);   // компактные
+        board_->setBoardSize(10);
+    }
+
+    // сброс отображения весов при смене режима
+    board_->setShowWeights(score ? showWeightsBox_->isChecked() : false);
+
+    // синхронизируем fillCombo с текущим fill режима
+    if (score) {
+        fillCombo_->blockSignals(true);
+        fillCombo_->setCurrentIndex(fillIndexFromMode(engine_.fillMode()));
+        fillCombo_->blockSignals(false);
+    } else {
+        fillCombo_->blockSignals(true);
+        fillCombo_->setCurrentIndex(0);
+        fillCombo_->blockSignals(false);
+    }
 }
 
-void MainWindow::onLanguageChanged(int index) {
-    lang_ = (index == 0) ? UiLang::RU : UiLang::EN;
-    retranslateUi();
-    updateInfoLabel();
+void MainWindow::refreshBoardAll() {
+    const int N = engine_.boardSize();
+
+    // веса (для score)
+    if (isScoreMode(engine_.mode())) {
+        QVector<int> w;
+        w.resize(N * N);
+        for (int r = 0; r < N; ++r) {
+            for (int c = 0; c < N; ++c) {
+                w[r * N + c] = engine_.cellWeight(r, c);
+            }
+        }
+        board_->setWeights(w);
+    } else {
+        // в классике веса = 0
+        QVector<int> w;
+        w.fill(0, N * N);
+        board_->setWeights(w);
+    }
+
+    // X/O + enabled
+    for (int r = 0; r < N; ++r) {
+        for (int c = 0; c < N; ++c) {
+            const int owner = engine_.cellOwner(r, c);
+            const bool enabled = engine_.isActive() && engine_.isMoveAllowed(r, c);
+            board_->setCellOwner(r, c, owner, enabled);
+        }
+    }
 }
 
-void MainWindow::onModeChanged(int) {
-    syncUiToEngine();
-    engine_.startNewGame();
-    refreshBoard();
-    updateInfoLabel();
-    updateRulesButton();
+void MainWindow::refreshStatus() {
+    const GameMode m = engine_.mode();
+    const int player = engine_.currentPlayer();
+    const QString p = (player == 1 ? "X" : "O");
+
+    QString status;
+    if (!engine_.isActive()) {
+        status = "Игра не активна. Нажми «Новая игра».";
+    } else {
+        status = QString("Ход: %1 | Осталось ходов: %2").arg(p).arg(engine_.movesLeft());
+    }
+
+    if (isScoreMode(m)) {
+        const int ar = engine_.activeRow();
+        const int ac = engine_.activeCol();
+
+        if (engine_.fillMode() == FillMode::TopDownRows && ar >= 0) {
+            status += QString(" | Активная строка: %1").arg(ar + 1);
+        } else if (engine_.fillMode() == FillMode::LeftRightCols && ac >= 0) {
+            status += QString(" | Активный столбец: %1").arg(ac + 1);
+        } else if ((engine_.fillMode() == FillMode::RandomRow || engine_.fillMode() == FillMode::RandomRowOrCol) && ar >= 0) {
+            status += QString(" | Случайная строка: %1").arg(ar + 1);
+        }
+        if ((engine_.fillMode() == FillMode::RandomCol || engine_.fillMode() == FillMode::RandomRowOrCol) && ac >= 0) {
+            status += QString(" | Случайный столбец: %1").arg(ac + 1);
+        }
+    }
+
+    statusLabel_->setText(status);
+
+    // score подпись
+    if (!isScoreMode(m)) {
+        scoreLabel_->setText("");
+        return;
+    }
+
+    const auto s = engine_.currentScore();
+    const QString scoreText =
+        QString("X: линии=%1, потрачено=%2, итог=%3   |   O: линии=%4, потрачено=%5, итог=%6")
+            .arg(s.xLine).arg(s.xSpent).arg(s.xTotal)
+            .arg(s.oLine).arg(s.oSpent).arg(s.oTotal);
+
+    scoreLabel_->setText(scoreText);
 }
 
-void MainWindow::onFillModeChanged(int) {
-    syncUiToEngine();
-    // не стартуем заново — просто обновим доступность клеток
-    refreshBoard();
-    updateInfoLabel();
+QIcon MainWindow::makeXIcon(int px) {
+    QPixmap pm(px, px);
+    pm.fill(Qt::transparent);
+
+    QPainter p(&pm);
+    p.setRenderHint(QPainter::Antialiasing, true);
+
+    QPen pen(QColor(30, 30, 30));
+    pen.setWidth(qMax(8, px / 10));
+    pen.setCapStyle(Qt::RoundCap);
+    p.setPen(pen);
+
+    const int m = qMax(20, px / 6);
+    p.drawLine(m, m, px - m, px - m);
+    p.drawLine(px - m, m, m, px - m);
+
+    return QIcon(pm);
+}
+
+QIcon MainWindow::makeOIcon(int px) {
+    QPixmap pm(px, px);
+    pm.fill(Qt::transparent);
+
+    QPainter p(&pm);
+    p.setRenderHint(QPainter::Antialiasing, true);
+
+    QPen pen(QColor(30, 30, 30));
+    pen.setWidth(qMax(8, px / 10));
+    pen.setCapStyle(Qt::RoundCap);
+    p.setPen(pen);
+
+    const int m = qMax(20, px / 6);
+    p.drawEllipse(QRect(m, m, px - 2 * m, px - 2 * m));
+
+    return QIcon(pm);
 }
