@@ -90,7 +90,8 @@
 
 ### Сборка и запуск
 
-bash
+```bash
 cmake -S . -B build
 cmake --build build -j
 ./build/game
+
