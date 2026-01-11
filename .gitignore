@@ -1,0 +1,9 @@
+.vscode/
+.idea/
+build/
+cmake-build-*/
+*.user
+*.pro.user
+.DS_Store
+*.log
+*.tmp
