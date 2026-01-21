@@ -45,6 +45,8 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     connect(cbXComputer_, &QCheckBox::toggled, this, &MainWindow::onPlayerTypeChanged);
     connect(cbOComputer_, &QCheckBox::toggled, this, &MainWindow::onPlayerTypeChanged);
 
+    connect(showWeightsCheck_, &QCheckBox::toggled, this, &MainWindow::onShowWeightsToggled);
+
     connect(board_, &BoardWidget::cellClicked, this, &MainWindow::onCellClicked);
 
     setMinimumSize(900, 600);
@@ -54,11 +56,8 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     refreshBoard();
     updateInfoLabel();
     updateRulesButton();
+    updateShowWeightsControls();
     maybeScheduleComputer();
-    showWeightsCheck_ = new QCheckBox(tr("Показать веса клеток"), this);
-    showWeightsCheck_->setChecked(false);
-    showWeightsCheck_->setVisible(false);
-
 }
 
 MainWindow::~MainWindow() = default;
@@ -103,6 +102,10 @@ void MainWindow::buildUi() {
     cbFill_->addItem("Random col");
     cbFill_->addItem("Random row OR col");
 
+    showWeightsCheck_ = new QCheckBox(grpSettings);
+    showWeightsCheck_->setChecked(false);
+    showWeightsCheck_->setVisible(false);
+
     cbXComputer_ = new QCheckBox(root);
     cbOComputer_ = new QCheckBox(root);
 
@@ -116,6 +119,9 @@ void MainWindow::buildUi() {
 
     settingsLayout->addWidget(lblFill_);
     settingsLayout->addWidget(cbFill_);
+
+    settingsLayout->addSpacing(8);
+    settingsLayout->addWidget(showWeightsCheck_);
 
     settingsLayout->addSpacing(8);
     settingsLayout->addWidget(cbXComputer_);
@@ -151,6 +157,8 @@ void MainWindow::retranslateUi() {
         lblFill_->setText("Заполнение (только Score)");
         cbXComputer_->setText("X — компьютер");
         cbOComputer_->setText("O — компьютер");
+
+        showWeightsCheck_->setText("Показать веса клеток");
     } else {
         setWindowTitle("TicTacToe");
         btnNewGame_->setText("New game");
@@ -162,10 +170,13 @@ void MainWindow::retranslateUi() {
         lblFill_->setText("Fill (Score only)");
         cbXComputer_->setText("X is computer");
         cbOComputer_->setText("O is computer");
+
+        showWeightsCheck_->setText("Show cell weights");
     }
 
     updateInfoLabel();
     updateRulesButton();
+    updateShowWeightsControls();
 }
 
 void MainWindow::syncUiToEngine() {
@@ -179,16 +190,48 @@ void MainWindow::syncUiToEngine() {
     engine_.setPlayerTypeO(cbOComputer_->isChecked() ? PlayerType::Computer : PlayerType::Human);
 }
 
+void MainWindow::updateShowWeightsControls() {
+    const bool score = (engine_.mode() == GameMode::Score10x10);
+    showWeightsCheck_->setVisible(score);
+
+    if (!score) {
+        showWeightsCheck_->setChecked(false);
+        board_->setShowWeights(false);
+    }
+}
+
+void MainWindow::onShowWeightsToggled(bool checked) {
+    Q_UNUSED(checked);
+    // отображение подтянется через refreshBoard()
+    refreshBoard();
+}
+
 void MainWindow::refreshBoard() {
     const int N = engine_.boardSize();
     board_->setBoardSize(N);
+
+    // фиксированный размер ячеек (красиво и одинаково):
+    // для 3×3 крупнее, для 10×10 меньше (и влезает в окно)
+    if (N == 3) board_->setCellSizePx(140);
+    else board_->setCellSizePx(64);
+
+    // веса показываем только в Score-режиме и только если включен чекбокс
+    const bool score = (engine_.mode() == GameMode::Score10x10);
+    board_->setShowWeights(score && showWeightsCheck_->isChecked());
 
     for (int r = 0; r < N; ++r) {
         for (int c = 0; c < N; ++c) {
             const int owner = engine_.cellOwner(r, c);
             QString text = owner == 0 ? "" : markText(owner);
+
             bool enabled = engine_.isMoveAllowed(r, c) && !engine_.isCurrentPlayerComputer();
             board_->setCellText(r, c, text, enabled);
+
+            if (score) {
+                board_->setCellWeight(r, c, engine_.cellWeight(r, c));
+            } else {
+                board_->setCellWeight(r, c, 0);
+            }
         }
     }
 }
@@ -339,6 +382,7 @@ void MainWindow::onNewGame() {
     refreshBoard();
     updateInfoLabel();
     updateRulesButton();
+    updateShowWeightsControls();
     maybeScheduleComputer();
 }
 
@@ -377,6 +421,7 @@ void MainWindow::onLanguageChanged(int) {
 
 void MainWindow::onModeChanged(int) {
     onNewGame();
+    updateShowWeightsControls();
     maybeScheduleComputer();
 }
 
@@ -386,5 +431,6 @@ void MainWindow::onFillModeChanged(int) {
     engine_.startNewGame();
     refreshBoard();
     updateInfoLabel();
+    updateShowWeightsControls();
     maybeScheduleComputer();
 }

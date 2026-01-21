@@ -28,6 +28,8 @@ private slots:
     void onFillModeChanged(int index);
     void onPlayerTypeChanged();
 
+    void onShowWeightsToggled(bool checked);
+
     void onCellClicked(int r, int c);
 
 private:
@@ -38,8 +40,9 @@ private:
     void refreshBoard();
     void updateInfoLabel();
     void updateRulesButton();
+    void updateShowWeightsControls();
+
     QString stripeInfoText() const;
-    QCheckBox* showWeightsCheck_ = nullptr;
 
     void maybeScheduleComputer();
     void doComputerStep();
@@ -62,6 +65,8 @@ private:
 
     QLabel* lblFill_ = nullptr;
     QComboBox* cbFill_ = nullptr;
+
+    QCheckBox* showWeightsCheck_ = nullptr;
 
     QCheckBox* cbXComputer_ = nullptr;
     QCheckBox* cbOComputer_ = nullptr;

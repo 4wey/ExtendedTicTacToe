@@ -2,6 +2,7 @@
 
 #include <QWidget>
 #include <QString>
+#include <QVector>
 
 class QPushButton;
 class QGridLayout;
@@ -17,6 +18,14 @@ public:
     void resetBoard();
 
     void setCellText(int r, int c, const QString& text, bool enabled);
+
+    // Score mode: веса клеток (отображаются только при включенном флаге)
+    void setCellWeight(int r, int c, int weight);
+    void setShowWeights(bool on);
+    bool showWeights() const { return showWeights_; }
+
+    // Фиксация размера клетки (в пикселях). Если 0 — автоматическая подгонка.
+    void setCellSizePx(int px);
 
 signals:
     void cellClicked(int r, int c);
@@ -34,4 +43,8 @@ private:
 
     QPushButton** cells_ = nullptr;
     int cellsCount_ = 0;
+
+    int* weights_ = nullptr;
+    bool showWeights_ = false;
+    int cellSizePx_ = 0;
 };
