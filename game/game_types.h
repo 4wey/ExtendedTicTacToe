@@ -13,3 +13,8 @@ enum class FillMode {
     RandomCol = 4,
     RandomRowOrCol = 5
 };
+
+enum class PlayerType {
+    Human = 0,
+    Computer = 1
+};

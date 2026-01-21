@@ -1,8 +1,159 @@
 #include "score_helpers.h"
 #include <QRandomGenerator>
 
+bool ScoreHelpers::isAllowed(FillMode fill, int, int activeRow, int activeCol, int r, int c) const {
+    switch (fill) {
+        case FillMode::Free:
+            return true;
+        case FillMode::TopDownRows:
+        case FillMode::RandomRow:
+            return r == activeRow;
+        case FillMode::LeftRightCols:
+        case FillMode::RandomCol:
+            return c == activeCol;
+        case FillMode::RandomRowOrCol:
+            return (r == activeRow) || (c == activeCol);
+    }
+    return true;
+}
+
+int ScoreHelpers::pieceCost(int player, int moveCountForThatPlayer) const {
+    if (moveCountForThatPlayer < 1) moveCountForThatPlayer = 1;
+
+    if (player == 1) {
+        return 2 * moveCountForThatPlayer;
+    }
+    return 2 * moveCountForThatPlayer + 1;
+}
+
 static bool inBounds(int N, int r, int c) {
     return r >= 0 && c >= 0 && r < N && c < N;
+}
+
+int ScoreHelpers::lineDelta(const QVector<int>& board,
+                            const QVector<int>& weights,
+                            int N, int r, int c,
+                            int L, int player) const {
+    int delta = 0;
+
+    const int dirs[4][2] = { {0,1}, {1,0}, {1,1}, {1,-1} };
+
+    for (int di = 0; di < 4; ++di) {
+        const int dr = dirs[di][0];
+        const int dc = dirs[di][1];
+
+        for (int off = -(L - 1); off <= 0; ++off) {
+            const int sr = r + off * dr;
+            const int sc = c + off * dc;
+            const int er = sr + (L - 1) * dr;
+            const int ec = sc + (L - 1) * dc;
+
+            if (!inBounds(N, sr, sc) || !inBounds(N, er, ec)) continue;
+
+            bool ok = true;
+            int sumW = 0;
+            for (int k = 0; k < L; ++k) {
+                const int rr = sr + k * dr;
+                const int cc = sc + k * dc;
+                const int idx = rr * N + cc;
+                if (board[idx] != player) { ok = false; break; }
+                sumW += weights[idx];
+            }
+            if (ok) delta += sumW;
+        }
+    }
+
+    return delta;
+}
+
+bool ScoreHelpers::rowHasEmpty(const QVector<int>& board, int N, int r) const {
+    for (int c = 0; c < N; ++c) {
+        if (board[r * N + c] == 0) return true;
+    }
+    return false;
+}
+
+bool ScoreHelpers::colHasEmpty(const QVector<int>& board, int N, int c) const {
+    for (int r = 0; r < N; ++r) {
+        if (board[r * N + c] == 0) return true;
+    }
+    return false;
+}
+
+int ScoreHelpers::pickRandomRowWithEmpty(const QVector<int>& board, int N) const {
+    QVector<int> rows;
+    rows.reserve(N);
+    for (int r = 0; r < N; ++r) {
+        if (rowHasEmpty(board, N, r)) rows.push_back(r);
+    }
+    if (rows.isEmpty()) return -1;
+    const int idx = QRandomGenerator::global()->bounded(rows.size());
+    return rows[idx];
+}
+
+int ScoreHelpers::pickRandomColWithEmpty(const QVector<int>& board, int N) const {
+    QVector<int> cols;
+    cols.reserve(N);
+    for (int c = 0; c < N; ++c) {
+        if (colHasEmpty(board, N, c)) cols.push_back(c);
+    }
+    if (cols.isEmpty()) return -1;
+    const int idx = QRandomGenerator::global()->bounded(cols.size());
+    return cols[idx];
+}
+
+void ScoreHelpers::updateStripe(FillMode fill,
+                                const QVector<int>& board,
+                                int N,
+                                int& activeRow,
+                                int& activeCol) const {
+    switch (fill) {
+        case FillMode::Free:
+            activeRow = -1;
+            activeCol = -1;
+            return;
+
+        case FillMode::TopDownRows: {
+            int r = activeRow;
+            if (r < 0) r = 0;
+            while (r < N && !rowHasEmpty(board, N, r)) r++;
+            activeRow = (r < N) ? r : -1;
+            activeCol = -1;
+            return;
+        }
+
+        case FillMode::LeftRightCols: {
+            int c = activeCol;
+            if (c < 0) c = 0;
+            while (c < N && !colHasEmpty(board, N, c)) c++;
+            activeCol = (c < N) ? c : -1;
+            activeRow = -1;
+            return;
+        }
+
+        case FillMode::RandomRow:
+            if (activeRow < 0 || !rowHasEmpty(board, N, activeRow)) {
+                activeRow = pickRandomRowWithEmpty(board, N);
+            }
+            activeCol = -1;
+            return;
+
+        case FillMode::RandomCol:
+            if (activeCol < 0 || !colHasEmpty(board, N, activeCol)) {
+                activeCol = pickRandomColWithEmpty(board, N);
+            }
+            activeRow = -1;
+            return;
+
+        case FillMode::RandomRowOrCol:
+            if (activeRow < 0 || !rowHasEmpty(board, N, activeRow)) {
+                activeRow = pickRandomRowWithEmpty(board, N);
+            }
+            if (activeCol < 0 || !colHasEmpty(board, N, activeCol)) {
+                activeCol = pickRandomColWithEmpty(board, N);
+            }
+            return;
+    }
 }
 
 QVector<int> ScoreHelpers::generateWeightsTiled4(int N) {
@@ -22,149 +173,4 @@ QVector<int> ScoreHelpers::generateWeightsTiled4(int N) {
         }
     }
     return w;
-}
-
-void ScoreHelpers::setFillMode(FillMode fill) {
-    fillMode_ = fill;
-    activeRow_ = -1;
-    activeCol_ = -1;
-}
-
-void ScoreHelpers::reset(const QVector<int>& state, int N) {
-    activeRow_ = -1;
-    activeCol_ = -1;
-
-    if (fillMode_ == FillMode::RandomRow || fillMode_ == FillMode::RandomCol || fillMode_ == FillMode::RandomRowOrCol) {
-        rerollRandom(state, N);
-        ensureRandomValid(state, N);
-    }
-}
-
-void ScoreHelpers::onMoveApplied(const QVector<int>& state, int N) {
-    if (fillMode_ == FillMode::RandomRow || fillMode_ == FillMode::RandomCol || fillMode_ == FillMode::RandomRowOrCol) {
-        rerollRandom(state, N);
-        ensureRandomValid(state, N);
-    }
-}
-
-int ScoreHelpers::firstRowWithEmpty(const QVector<int>& state, int N) const {
-    for (int r = 0; r < N; ++r) {
-        for (int c = 0; c < N; ++c) {
-            if (state[r * N + c] == 0) return r;
-        }
-    }
-    return -1;
-}
-
-int ScoreHelpers::firstColWithEmpty(const QVector<int>& state, int N) const {
-    for (int c = 0; c < N; ++c) {
-        for (int r = 0; r < N; ++r) {
-            if (state[r * N + c] == 0) return c;
-        }
-    }
-    return -1;
-}
-
-int ScoreHelpers::randomRowWithEmpty(const QVector<int>& state, int N) {
-    QVector<int> rows;
-    rows.reserve(N);
-
-    for (int r = 0; r < N; ++r) {
-        for (int c = 0; c < N; ++c) {
-            if (state[r * N + c] == 0) { rows.push_back(r); break; }
-        }
-    }
-    if (rows.isEmpty()) return -1;
-
-    int i = QRandomGenerator::global()->bounded(rows.size());
-    return rows[i];
-}
-
-int ScoreHelpers::randomColWithEmpty(const QVector<int>& state, int N) {
-    QVector<int> cols;
-    cols.reserve(N);
-
-    for (int c = 0; c < N; ++c) {
-        for (int r = 0; r < N; ++r) {
-            if (state[r * N + c] == 0) { cols.push_back(c); break; }
-        }
-    }
-    if (cols.isEmpty()) return -1;
-
-    int i = QRandomGenerator::global()->bounded(cols.size());
-    return cols[i];
-}
-
-void ScoreHelpers::rerollRandom(const QVector<int>& state, int N) {
-    if (fillMode_ == FillMode::RandomRow) {
-        activeRow_ = randomRowWithEmpty(state, N);
-        activeCol_ = -1;
-    } else if (fillMode_ == FillMode::RandomCol) {
-        activeCol_ = randomColWithEmpty(state, N);
-        activeRow_ = -1;
-    } else if (fillMode_ == FillMode::RandomRowOrCol) {
-        activeRow_ = randomRowWithEmpty(state, N);
-        activeCol_ = randomColWithEmpty(state, N);
-    }
-}
-
-void ScoreHelpers::ensureRandomValid(const QVector<int>& state, int N) {
-    if (fillMode_ == FillMode::RandomRow || fillMode_ == FillMode::RandomRowOrCol) {
-        bool ok = false;
-        if (activeRow_ >= 0) {
-            for (int c = 0; c < N; ++c) {
-                if (state[activeRow_ * N + c] == 0) { ok = true; break; }
-            }
-        }
-        if (!ok) activeRow_ = randomRowWithEmpty(state, N);
-    }
-
-    if (fillMode_ == FillMode::RandomCol || fillMode_ == FillMode::RandomRowOrCol) {
-        bool ok = false;
-        if (activeCol_ >= 0) {
-            for (int r = 0; r < N; ++r) {
-                if (state[r * N + activeCol_] == 0) { ok = true; break; }
-            }
-        }
-        if (!ok) activeCol_ = randomColWithEmpty(state, N);
-    }
-}
-
-int ScoreHelpers::activeRow(const QVector<int>& state, int N) const {
-    if (fillMode_ == FillMode::TopDownRows) return firstRowWithEmpty(state, N);
-    if (fillMode_ == FillMode::RandomRow || fillMode_ == FillMode::RandomRowOrCol) return activeRow_;
-    return -1;
-}
-
-int ScoreHelpers::activeCol(const QVector<int>& state, int N) const {
-    if (fillMode_ == FillMode::LeftRightCols) return firstColWithEmpty(state, N);
-    if (fillMode_ == FillMode::RandomCol || fillMode_ == FillMode::RandomRowOrCol) return activeCol_;
-    return -1;
-}
-
-bool ScoreHelpers::isMoveAllowed(const QVector<int>& state, int N, int r, int c) const {
-    if (!inBounds(N, r, c)) return false;
-    if (state[r * N + c] != 0) return false;
-
-    if (fillMode_ == FillMode::Free) return true;
-
-    if (fillMode_ == FillMode::TopDownRows) {
-        int ar = firstRowWithEmpty(state, N);
-        return (ar >= 0 && r == ar);
-    }
-
-    if (fillMode_ == FillMode::LeftRightCols) {
-        int ac = firstColWithEmpty(state, N);
-        return (ac >= 0 && c == ac);
-    }
-
-    if (fillMode_ == FillMode::RandomRow) return (activeRow_ >= 0 && r == activeRow_);
-    if (fillMode_ == FillMode::RandomCol) return (activeCol_ >= 0 && c == activeCol_);
-    if (fillMode_ == FillMode::RandomRowOrCol) {
-        bool okRow = (activeRow_ >= 0 && r == activeRow_);
-        bool okCol = (activeCol_ >= 0 && c == activeCol_);
-        return okRow || okCol;
-    }
-
-    return true;
 }
