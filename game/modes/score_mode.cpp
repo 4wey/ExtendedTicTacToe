@@ -51,6 +51,10 @@ bool ScoreMode::isMoveAllowed(int r, int c) const {
     if (r < 0 || c < 0 || r >= N || c >= N) return false;
     if (board_[r * N + c] != 0) return false;
 
+    if (fill_ == FillMode::Gravity) {
+        if (r < N - 1 && board_[(r + 1) * N + c] == 0) return false;
+    }
+
     return helpers_.isAllowed(fill_, N, activeRow_, activeCol_, r, c);
 }
 

@@ -66,5 +66,4 @@ QVector<int> localState_;
 
 int forcedLocal_ = -1;
 
-
 };
