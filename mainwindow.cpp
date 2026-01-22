@@ -92,9 +92,9 @@ cbLanguage_->addItem("EN");
 
 lblMode_ = new QLabel(grpSettings);
 cbMode_ = new QComboBox(grpSettings);
-cbMode_->addItem("Classic 3x3");
-cbMode_->addItem("Score 10x10");
-cbMode_->addItem("Ultimate TicTacToe");
+cbMode_->addItem("3x3 mode");
+cbMode_->addItem("10x10 mode");
+cbMode_->addItem("Ultimate mode");
 
 lblFill_ = new QLabel(grpSettings);
 cbFill_ = new QComboBox(grpSettings);

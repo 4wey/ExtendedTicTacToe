@@ -30,7 +30,6 @@ protected:
         p.setRenderHint(QPainter::Antialiasing, true);
 
         QFont f = font();
-        // подпись веса должна быть заметно меньше, чем X/O
         f.setPointSize(std::max(8, f.pointSize() / 3));
         f.setBold(true);
         p.setFont(f);
@@ -39,7 +38,6 @@ protected:
         const int pad = 6;
         QRect r = rect().adjusted(pad, pad, -pad, -pad);
 
-        // Рисуем в правом нижнем углу
         p.drawText(r, Qt::AlignRight | Qt::AlignBottom, s);
     }
 
@@ -50,7 +48,7 @@ private:
 
 inline CellButton* asCell(QPushButton* b) { return static_cast<CellButton*>(b); }
 
-} // namespace
+}
 
 BoardWidget::BoardWidget(QWidget* parent) : QWidget(parent) {
     grid_ = new QGridLayout(this);
@@ -118,7 +116,6 @@ void BoardWidget::setCellText(int r, int c, const QString& text, bool enabled) {
 }
 
 void BoardWidget::rebuild() {
-    // очистка layout
     while (QLayoutItem* item = grid_->takeAt(0)) {
         if (QWidget* w = item->widget()) w->deleteLater();
         delete item;
@@ -169,7 +166,6 @@ void BoardWidget::updateCellVisuals() {
     const int h = height();
     int cell = (w < h ? w : h) / (N_ > 0 ? N_ : 1);
 
-    // фиксируем размер, но не даем выйти за границы окна
     if (cellSizePx_ > 0) cell = std::min(cell, cellSizePx_);
 
     int px = cell / 2;
@@ -184,7 +180,6 @@ void BoardWidget::updateCellVisuals() {
         if (!cells_[i]) continue;
         cells_[i]->setFont(f);
 
-        // ровный квадрат фиксированного размера
         cells_[i]->setMinimumSize(cell, cell);
         cells_[i]->setMaximumSize(cell, cell);
     }

@@ -19,12 +19,10 @@ public:
 
     void setCellText(int r, int c, const QString& text, bool enabled);
 
-    // Score mode: веса клеток (отображаются только при включенном флаге)
     void setCellWeight(int r, int c, int weight);
     void setShowWeights(bool on);
     bool showWeights() const { return showWeights_; }
 
-    // Фиксация размера клетки (в пикселях). Если 0 — автоматическая подгонка.
     void setCellSizePx(int px);
 
 signals:

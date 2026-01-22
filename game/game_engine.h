@@ -28,7 +28,7 @@ public:
     int movesMade() const { return modeImpl_ ? modeImpl_->movesMade() : 0; }
     int movesLeft() const { return modeImpl_ ? modeImpl_->movesLeft() : 0; }
 
-    int currentPlayer() const { return modeImpl_ ? modeImpl_->currentPlayer() : 1; } // 1 = X, -1 = O
+    int currentPlayer() const { return modeImpl_ ? modeImpl_->currentPlayer() : 1; } 
     int cellOwner(int r, int c) const { return modeImpl_ ? modeImpl_->cellOwner(r, c) : 0; }
     int cellWeight(int r, int c) const { return modeImpl_ ? modeImpl_->cellWeight(r, c) : 0; }
 
