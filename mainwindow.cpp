@@ -104,6 +104,7 @@ cbFill_->addItem("Left-right cols");
 cbFill_->addItem("Random row");
 cbFill_->addItem("Random col");
 cbFill_->addItem("Random row OR col");
+cbFill_->addItem("Gravity");
 
 showWeightsCheck_ = new QCheckBox(grpSettings);
 showWeightsCheck_->setChecked(false);
@@ -163,6 +164,14 @@ if (lang_ == UiLang::RU) {
     cbXComputer_->setText("X — компьютер");
     cbOComputer_->setText("O — компьютер");
 
+    cbFill_->setItemText(0, "Свободно");
+    cbFill_->setItemText(1, "Сверху вниз (строки)");
+    cbFill_->setItemText(2, "Слева направо (столбцы)");
+    cbFill_->setItemText(3, "Случайная строка");
+    cbFill_->setItemText(4, "Случайный столбец");
+    cbFill_->setItemText(5, "Случайная строка или столбец");
+    cbFill_->setItemText(6, "Гравитация");
+
     showWeightsCheck_->setText("Показать веса клеток");
 } else {
     setWindowTitle("TicTacToe");
@@ -175,6 +184,14 @@ if (lang_ == UiLang::RU) {
     lblFill_->setText("Fill (Score only)");
     cbXComputer_->setText("X is computer");
     cbOComputer_->setText("O is computer");
+
+    cbFill_->setItemText(0, "Free");
+    cbFill_->setItemText(1, "Top-down rows");
+    cbFill_->setItemText(2, "Left-right cols");
+    cbFill_->setItemText(3, "Random row");
+    cbFill_->setItemText(4, "Random col");
+    cbFill_->setItemText(5, "Random row OR col");
+    cbFill_->setItemText(6, "Gravity");
 
     showWeightsCheck_->setText("Show cell weights");
 }

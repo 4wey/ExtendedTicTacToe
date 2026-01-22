@@ -12,7 +12,8 @@ TopDownRows = 1,
 LeftRightCols = 2,
 RandomRow = 3,
 RandomCol = 4,
-RandomRowOrCol = 5
+RandomRowOrCol = 5,
+Gravity = 6
 };
 
 enum class PlayerType {

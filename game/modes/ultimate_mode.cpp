@@ -142,6 +142,7 @@ if (!localPlayable(localIdx)) return false;
 int effectiveForced = forcedLocal_;
 if (effectiveForced != -1 && !localPlayable(effectiveForced)) effectiveForced = -1;
 
+
 if (effectiveForced == -1) return true;
 return localIdx == effectiveForced;
 

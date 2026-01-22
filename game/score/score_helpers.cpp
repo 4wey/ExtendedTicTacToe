@@ -13,6 +13,8 @@ bool ScoreHelpers::isAllowed(FillMode fill, int, int activeRow, int activeCol, i
             return c == activeCol;
         case FillMode::RandomRowOrCol:
             return (r == activeRow) || (c == activeCol);
+        case FillMode::Gravity:
+            return true;
     }
     return true;
 }
@@ -109,6 +111,7 @@ void ScoreHelpers::updateStripe(FillMode fill,
                                 int& activeCol) const {
     switch (fill) {
         case FillMode::Free:
+        case FillMode::Gravity:
             activeRow = -1;
             activeCol = -1;
             return;
